@@ -17,43 +17,23 @@ import {
   ApiBearerAuth,
 } from '@nestjs/swagger';
 import { UsersService } from './users.service';
-import { CreateUserDto } from '../dto/userDto/create-user.dto';
 import { UpdateUserDto } from '../dto/userDto/update-user.dto';
 import { JwtAuthGuard, RolesGuard } from '../auth/guards';
 import { Roles, UserRole } from '../auth/decorators/roles.decorator';
 
-@ApiTags('users')
+@ApiTags('admin')
 @ApiBearerAuth('JWT-auth')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
-  @Post()
-  @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'Create a new user (Admin only)' })
-  @ApiBody({ type: CreateUserDto })
-  @ApiResponse({
-    status: 201,
-    description: 'User created successfully',
-    schema: {
-      example: {
-        id: 1,
-        email: 'john.doe@example.com',
-        name: 'John Doe',
-        createdAt: '2025-09-20T10:00:00.000Z',
-        updatedAt: '2025-09-20T10:00:00.000Z',
-      },
-    },
-  })
-  @ApiResponse({ status: 400, description: 'Bad request' })
-  create(@Body() createUserDto: CreateUserDto) {
-    return this.usersService.create(createUserDto);
-  }
-
   @Get()
   @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'Get all users (Admin only)' })
+  @ApiOperation({ 
+    summary: 'Get all users (Admin only)',
+    description: 'Retrieve all users in the system. **Requires JWT token + ADMIN role.**'
+  })
   @ApiResponse({
     status: 200,
     description: 'List of all users',
@@ -75,7 +55,10 @@ export class UsersController {
 
   @Get(':id')
   @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'Get a user by ID (Admin only)' })
+  @ApiOperation({ 
+    summary: 'Get user by ID (Admin only)',
+    description: 'Retrieve a specific user by their ID. **Requires JWT token + ADMIN role.**'
+  })
   @ApiParam({ name: 'id', description: 'User ID', example: 'f47ac10b-58cc-4372-a567-0e02b2c3d479' })
   @ApiResponse({
     status: 200,
@@ -96,7 +79,10 @@ export class UsersController {
   }
 
   @Patch(':id')
-  @ApiOperation({ summary: 'Update a user' })
+  @ApiOperation({ 
+    summary: 'Update user (Admin only)',
+    description: 'Update user information by ID. **Requires JWT token + ADMIN role.**'
+  })
   @ApiParam({ name: 'id', description: 'User ID', example: 'f47ac10b-58cc-4372-a567-0e02b2c3d479' })
   @ApiBody({ type: UpdateUserDto })
   @ApiResponse({
@@ -123,7 +109,10 @@ export class UsersController {
 
   @Delete(':id')
   @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'Delete a user (Admin only)' })
+  @ApiOperation({ 
+    summary: 'Delete user (Admin only)',
+    description: 'Delete a user by ID. **Requires JWT token + ADMIN role.**'
+  })
   @ApiParam({ name: 'id', description: 'User ID', example: 'f47ac10b-58cc-4372-a567-0e02b2c3d479' })
   @ApiResponse({ status: 200, description: 'User deleted successfully' })
   @ApiResponse({ status: 404, description: 'User not found' })

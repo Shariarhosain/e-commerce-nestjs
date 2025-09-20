@@ -16,6 +16,7 @@ import {
   ForgotPasswordDto,
   ResetPasswordDto,
   RefreshTokenDto,
+  UpdateProfileDto,
 } from './dto';
 import { User } from '@prisma/client';
 
@@ -424,6 +425,42 @@ export class AuthService {
     });
 
     return { message: 'Logged out successfully' };
+  }
+
+  async updateProfile(userId: string, dto: UpdateProfileDto): Promise<Omit<User, 'password'>> {
+    // Check if username is being updated and if it's already taken
+    if (dto.username) {
+      const existingUser = await this.prisma.user.findUnique({
+        where: { username: dto.username },
+      });
+
+      if (existingUser && existingUser.id !== userId) {
+        throw new ConflictException('Username already exists');
+      }
+    }
+
+    // Check if email is being updated and if it's already taken
+    if (dto.email) {
+      const existingUser = await this.prisma.user.findUnique({
+        where: { email: dto.email },
+      });
+
+      if (existingUser && existingUser.id !== userId) {
+        throw new ConflictException('Email already exists');
+      }
+    }
+
+    // Update user profile
+    const updatedUser = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        ...(dto.email && { email: dto.email }),
+        ...(dto.username && { username: dto.username }),
+        ...(dto.name && { name: dto.name }),
+      },
+    });
+
+    return this.excludePassword(updatedUser);
   }
 
   private async generateTokens(user: User): Promise<TokenResponse> {

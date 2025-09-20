@@ -7,6 +7,7 @@ import {
   UseGuards,
   Request,
   Get,
+  Patch,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -19,6 +20,7 @@ import {
   ApiConflictResponse,
   ApiBadRequestResponse,
   ApiNotFoundResponse,
+  ApiOkResponse,
 } from '@nestjs/swagger';
 import { AuthService, AuthResponse, TokenResponse } from './auth.service';
 import {
@@ -28,6 +30,7 @@ import {
   ForgotPasswordDto,
   ResetPasswordDto,
   RefreshTokenDto,
+  UpdateProfileDto,
   RegisterResponseDto,
   AuthResponseDto,
   TokenResponseDto,
@@ -36,16 +39,16 @@ import {
 } from './dto';
 import { LocalAuthGuard, JwtAuthGuard } from './guards';
 
-@ApiTags('auth')
 @Controller('api/auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
+  @ApiTags('guest')
   @ApiOperation({ 
     summary: 'Register new user',
-    description: 'Create a new user account. Sends verification email with 6-digit code. Returns temporary token for verification.'
+    description: 'Create a new user account. Sends verification email with 6-digit code. **No authentication required.**'
   })
   @ApiBody({ 
     type: RegisterDto,
@@ -98,9 +101,10 @@ export class AuthController {
 
   @Post('create-admin')
   @HttpCode(HttpStatus.CREATED)
+  @ApiTags('admin')
   @ApiOperation({ 
     summary: 'Create first admin user',
-    description: 'Creates the first admin user in the system. Can only be used when no admin exists.'
+    description: 'Creates the first admin user in the system. **System setup endpoint.**'
   })
   @ApiBody({ 
     type: RegisterDto,
@@ -145,6 +149,7 @@ export class AuthController {
 
   @Post('verify-email')
   @HttpCode(HttpStatus.OK)
+  @ApiTags('guest')
   @ApiOperation({ 
     summary: 'Verify email address',
     description: 'Verify user email using the 6-digit code sent during registration. Returns access and refresh tokens.'
@@ -210,12 +215,13 @@ export class AuthController {
     return this.authService.verifyEmail(dto);
   }
 
-  @UseGuards(LocalAuthGuard)
   @Post('login')
+  @UseGuards(LocalAuthGuard)
   @HttpCode(HttpStatus.OK)
+  @ApiTags('guest')
   @ApiOperation({ 
-    summary: 'Login user',
-    description: 'Authenticate user with email and password. Returns access and refresh tokens. Requires verified email.'
+    summary: 'User login',
+    description: 'Authenticate user with email/password. Returns access and refresh tokens. **No authentication required.**'
   })
   @ApiBody({ 
     type: LoginDto,
@@ -266,9 +272,10 @@ export class AuthController {
 
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
+  @ApiTags('user')
   @ApiOperation({ 
     summary: 'Refresh JWT tokens',
-    description: 'Generate new access and refresh tokens using a valid refresh token.'
+    description: 'Get new access and refresh tokens using valid refresh token. **Requires valid refresh token.**'
   })
   @ApiBody({ 
     type: RefreshTokenDto,
@@ -301,6 +308,7 @@ export class AuthController {
 
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
+  @ApiTags('guest')
   @ApiOperation({ 
     summary: 'Request password reset',
     description: 'Send password reset email to user. Always returns success message for security.'
@@ -328,6 +336,7 @@ export class AuthController {
 
   @Post('reset-password')
   @HttpCode(HttpStatus.OK)
+  @ApiTags('guest')
   @ApiOperation({ 
     summary: 'Reset password',
     description: 'Reset user password using the token from password reset email.'
@@ -360,13 +369,14 @@ export class AuthController {
     return this.authService.resetPassword(dto);
   }
 
-  @UseGuards(JwtAuthGuard)
   @Post('logout')
+  @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth('JWT-auth')
+  @ApiTags('user')
   @ApiOperation({ 
-    summary: 'Logout user',
-    description: 'Logout authenticated user and invalidate refresh token.'
+    summary: 'User logout',
+    description: 'Revoke refresh token and logout user. **Requires JWT token.**'
   })
   @ApiResponse({
     status: 200,
@@ -392,13 +402,13 @@ export class AuthController {
     return this.authService.logout(req.user.id);
   }
 
-  @UseGuards(JwtAuthGuard)
   @Get('profile')
-  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
+  @ApiTags('user')
   @ApiOperation({ 
     summary: 'Get user profile',
-    description: 'Get current authenticated user profile information.'
+    description: 'Get current authenticated user profile. **Requires JWT token.**'
   })
   @ApiResponse({
     status: 200,
@@ -444,6 +454,80 @@ export class AuthController {
   async getProfile(@Request() req) {
     return {
       user: req.user,
+    };
+  }
+
+  @Patch('profile')
+  @UseGuards(JwtAuthGuard)
+  @ApiTags('user')
+  @ApiOperation({ 
+    summary: 'Update user profile',
+    description: 'Allow users to update their own profile information (email, username, name)'
+  })
+  @ApiOkResponse({
+    description: 'Profile updated successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string', example: 'Profile updated successfully' },
+        user: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', example: 'cuid123...' },
+            email: { type: 'string', example: 'john.doe@example.com' },
+            username: { type: 'string', example: 'johndoe' },
+            name: { type: 'string', example: 'John Doe' },
+            role: { type: 'string', example: 'USER' },
+            isEmailVerified: { type: 'boolean', example: true },
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' }
+          }
+        }
+      }
+    }
+  })
+  @ApiBadRequestResponse({
+    description: 'Invalid input data',
+    schema: {
+      type: 'object',
+      properties: {
+        message: { 
+          oneOf: [
+            { type: 'string', example: 'Please provide a valid email address' },
+            { type: 'array', items: { type: 'string' }, example: ['Username must be at least 3 characters long'] }
+          ]
+        },
+        error: { type: 'string', example: 'Bad Request' },
+        statusCode: { type: 'number', example: 400 }
+      }
+    }
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Invalid or missing JWT token',
+    schema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string', example: 'Unauthorized' },
+        statusCode: { type: 'number', example: 401 }
+      }
+    }
+  })
+  @ApiConflictResponse({
+    description: 'Username or email already exists',
+    schema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string', example: 'Username already exists' },
+        error: { type: 'string', example: 'Conflict' },
+        statusCode: { type: 'number', example: 409 }
+      }
+    }
+  })
+  async updateProfile(@Request() req, @Body() updateProfileDto: UpdateProfileDto) {
+    const updatedUser = await this.authService.updateProfile(req.user.id, updateProfileDto);
+    return {
+      message: 'Profile updated successfully',
+      user: updatedUser,
     };
   }
 }
