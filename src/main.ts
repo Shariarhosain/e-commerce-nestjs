@@ -18,11 +18,24 @@ async function bootstrap() {
   
   // Swagger Configuration
   const config = new DocumentBuilder()
-    .setTitle('NestJS + Prisma User API')
-    .setDescription('A RESTful API for user management built with NestJS, Prisma, and PostgreSQL')
+    .setTitle('E-Commerce NestJS API')
+    .setDescription('A comprehensive RESTful API for e-commerce with authentication, user management, built with NestJS, Prisma, and PostgreSQL')
     .setVersion('1.0')
-    .addTag('users', 'User management endpoints')
+    .addTag('auth', 'Authentication endpoints - Register, Login, JWT management')
+    .addTag('users', 'User management endpoints - CRUD operations (Protected)')
     .addTag('app', 'General application endpoints')
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        name: 'JWT',
+        description: 'Enter JWT token',
+        in: 'header',
+      },
+      'JWT-auth', // This name here is important for matching up with @ApiBearerAuth() in your controller!
+    )
+    .addServer('http://localhost:3000', 'Development server')
     .build();
   
   const document = SwaggerModule.createDocument(app, config);
@@ -33,10 +46,16 @@ async function bootstrap() {
   console.log('📊 Swagger API Documentation: http://localhost:3000/api-docs');
   console.log('📋 Available Endpoints:');
   console.log('  - GET    /            - Welcome message');
-  console.log('  - GET    /users      - Get all users');
-  console.log('  - POST   /users      - Create user');
-  console.log('  - GET    /users/:id  - Get user by ID');
-  console.log('  - PATCH  /users/:id  - Update user');
-  console.log('  - DELETE /users/:id  - Delete user');
+  console.log('  - POST   /api/auth/register      - Register new user');
+  console.log('  - POST   /api/auth/verify-email  - Verify email with code');
+  console.log('  - POST   /api/auth/login         - Login user');
+  console.log('  - POST   /api/auth/refresh       - Refresh JWT tokens');
+  console.log('  - POST   /api/auth/logout        - Logout user (Protected)');
+  console.log('  - GET    /api/auth/profile       - Get user profile (Protected)');
+  console.log('  - GET    /users                  - Get all users (Protected)');
+  console.log('  - POST   /users                  - Create user (Protected)');
+  console.log('  - GET    /users/:id              - Get user by ID (Protected)');
+  console.log('  - PATCH  /users/:id              - Update user (Protected)');
+  console.log('  - DELETE /users/:id              - Delete user (Protected)');
 }
 bootstrap();

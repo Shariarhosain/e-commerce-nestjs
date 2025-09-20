@@ -1,12 +1,224 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# E-Commerce NestJS API Documentation
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+## Overview
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
+This is a comprehensive RESTful API for e-commerce built with NestJS, Prisma, and PostgreSQL. It features a complete authentication system with JWT tokens, email verification, and protected endpoints.
+
+## 🚀 Getting Started
+
+### Prerequisites
+- Node.js (v16 or higher)
+- PostgreSQL database
+- SMTP email service (Gmail recommended for development)
+
+### Installation
+```bash
+npm install
+```
+
+### Environment Setup
+Configure your `.env` file with the following variables:
+```env
+# Database
+DATABASE_URL="postgresql://username:password@localhost:5432/dbname"
+
+# JWT Configuration
+JWT_SECRET="your-super-secret-jwt-key-change-this-in-production"
+JWT_ACCESS_EXPIRES="15m"
+JWT_REFRESH_EXPIRES="7d"
+
+# Email Configuration (SMTP)
+SMTP_HOST="smtp.gmail.com"
+SMTP_PORT="587"
+SMTP_USER="your-email@gmail.com"
+SMTP_PASS="your-app-password"
+SMTP_FROM="your-email@gmail.com"
+
+# Application
+NODE_ENV="development"
+PORT=3000
+FRONTEND_URL="http://localhost:3000"
+```
+
+### Database Setup
+```bash
+# Run Prisma migrations
+npx prisma migrate dev
+
+# Generate Prisma client
+npx prisma generate
+```
+
+### Start the Application
+```bash
+# Development
+npm run start:dev
+
+# Production
+npm run start:prod
+```
+
+## 📚 API Documentation
+
+### Swagger UI
+Access the interactive API documentation at: **http://localhost:3000/api-docs**
+
+The Swagger UI provides:
+- 📋 Complete endpoint documentation
+- 🔐 JWT Bearer token authentication
+- 🧪 Interactive API testing
+- 📝 Request/response examples
+- ✅ Input validation schemas
+
+### Base URL
+```
+http://localhost:3000
+```
+
+## 🔐 Authentication Flow
+
+### 1. User Registration
+- **Endpoint**: `POST /api/auth/register`
+- **Description**: Create a new user account
+- **Email**: Sends 6-digit verification code via email
+- **Returns**: Temporary verification token
+
+### 2. Email Verification
+- **Endpoint**: `POST /api/auth/verify-email`
+- **Description**: Verify email with 6-digit code
+- **Returns**: Access token + Refresh token
+
+### 3. User Login
+- **Endpoint**: `POST /api/auth/login`
+- **Description**: Authenticate with email/password
+- **Requirement**: Email must be verified
+- **Returns**: Access token + Refresh token
+
+### 4. Token Management
+- **Access Token**: Expires in 15 minutes
+- **Refresh Token**: Expires in 7 days
+- **Refresh Endpoint**: `POST /api/auth/refresh`
+
+## 🛡️ Protected Endpoints
+
+All `/users` endpoints require JWT Bearer authentication:
+
+```http
+Authorization: Bearer <your-jwt-token>
+```
+
+### Available User Endpoints:
+- `GET /users` - Get all users
+- `POST /users` - Create new user
+- `GET /users/:id` - Get user by ID
+- `PATCH /users/:id` - Update user
+- `DELETE /users/:id` - Delete user
+
+## 📋 API Endpoints Summary
+
+### Authentication Endpoints
+
+| Method | Endpoint | Description | Auth Required |
+|--------|----------|-------------|---------------|
+| POST | `/api/auth/register` | Register new user | ❌ |
+| POST | `/api/auth/verify-email` | Verify email with code | ❌ |
+| POST | `/api/auth/login` | Login user | ❌ |
+| POST | `/api/auth/refresh` | Refresh tokens | ❌ |
+| POST | `/api/auth/forgot-password` | Request password reset | ❌ |
+| POST | `/api/auth/reset-password` | Reset password | ❌ |
+| POST | `/api/auth/logout` | Logout user | ✅ |
+| GET | `/api/auth/profile` | Get user profile | ✅ |
+
+### User Management Endpoints
+
+| Method | Endpoint | Description | Auth Required |
+|--------|----------|-------------|---------------|
+| GET | `/users` | Get all users | ✅ |
+| POST | `/users` | Create user | ✅ |
+| GET | `/users/:id` | Get user by ID | ✅ |
+| PATCH | `/users/:id` | Update user | ✅ |
+| DELETE | `/users/:id` | Delete user | ✅ |
+
+## 🧪 Testing Examples
+
+### Register a New User
+```bash
+curl -X POST http://localhost:3000/api/auth/register \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "email": "john.doe@example.com",
+    "username": "johndoe",
+    "password": "SecurePassword123!",
+    "name": "John Doe"
+  }'
+```
+
+### Login
+```bash
+curl -X POST http://localhost:3000/api/auth/login \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "email": "john.doe@example.com",
+    "password": "SecurePassword123!"
+  }'
+```
+
+### Access Protected Endpoint
+```bash
+curl -X GET http://localhost:3000/api/auth/profile \\
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+## 🔒 Security Features
+
+- **Password Hashing**: bcryptjs with salt rounds of 12
+- **JWT Security**: Separate access and refresh tokens
+- **Email Verification**: Required before login
+- **Input Validation**: Comprehensive DTOs with class-validator
+- **Rate Limiting**: Can be configured (recommended for production)
+- **CORS**: Enabled for development
+
+## 📊 Response Codes
+
+| Code | Description |
+|------|-------------|
+| 200 | Success |
+| 201 | Created |
+| 400 | Bad Request (validation errors) |
+| 401 | Unauthorized (invalid/missing token) |
+| 403 | Forbidden (email not verified) |
+| 404 | Not Found |
+| 409 | Conflict (email/username exists) |
+| 500 | Internal Server Error |
+
+## 🏗️ Architecture
+
+### Domain-Driven Design (DDD)
+```
+src/
+├── auth/                   # Authentication Domain
+│   ├── dto/               # Data Transfer Objects
+│   ├── guards/            # Authentication Guards
+│   ├── strategies/        # Passport Strategies
+│   ├── auth.controller.ts # API Endpoints
+│   ├── auth.service.ts    # Business Logic
+│   ├── auth.module.ts     # Module Configuration
+│   └── email.service.ts   # Email Service
+├── users/                 # User Management Domain
+├── prisma/               # Database Layer
+└── main.ts               # Application Bootstrap
+```
+
+### Key Components
+- **Controllers**: Handle HTTP requests/responses
+- **Services**: Business logic and data processing
+- **DTOs**: Data validation and transformation
+- **Guards**: Authentication and authorization
+- **Strategies**: Passport authentication strategies
+
+---
+
+For more detailed API documentation, visit the **Swagger UI** at http://localhost:3000/api-docs when the server is running.
 <a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
 <a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
 <a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
