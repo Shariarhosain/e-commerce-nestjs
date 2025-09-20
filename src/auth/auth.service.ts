@@ -12,9 +12,6 @@ import { EmailService } from './email.service';
 import {
   RegisterDto,
   LoginDto,
-  VerifyEmailDto,
-  ForgotPasswordDto,
-  ResetPasswordDto,
   RefreshTokenDto,
   UpdateProfileDto,
 } from './dto';
@@ -39,7 +36,7 @@ export class AuthService {
     private emailService: EmailService,
   ) {}
 
-  async register(dto: RegisterDto): Promise<{ message: string; token: string }> {
+  async register(dto: RegisterDto): Promise<AuthResponse> {
     // Check if user already exists
     const existingUser = await this.prisma.user.findFirst({
       where: {
@@ -59,51 +56,33 @@ export class AuthService {
     // Hash password
     const hashedPassword = await bcrypt.hash(dto.password, 12);
 
-    // Generate verification code
-    const verificationCode = this.emailService.generateVerificationCode();
-    const verificationExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
-
-    // Create user
+    // Create user with email already verified
     const user = await this.prisma.user.create({
       data: {
         email: dto.email,
         username: dto.username,
         password: hashedPassword,
         name: dto.name,
+        isEmailVerified: true, // Auto-verify since we're removing email verification
       },
     });
 
-    // Create email verification record
-    await this.prisma.emailVerification.create({
+    // Generate tokens
+    const tokens = await this.generateTokens(user);
+
+    // Store refresh token in database
+    await this.prisma.refreshToken.create({
       data: {
         userId: user.id,
-        code: verificationCode,
-        expiresAt: verificationExpires,
+        token: tokens.refreshToken,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
       },
-    });
-
-    // Generate temporary token for verification
-    const verificationToken = this.jwtService.sign(
-      { sub: user.id, email: user.email, type: 'email_verification' },
-      { expiresIn: '15m' },
-    );
-
-    // Send verification email asynchronously
-    setImmediate(async () => {
-      try {
-        await this.emailService.sendVerificationEmail(
-          user.email,
-          verificationCode,
-          verificationToken,
-        );
-      } catch (error) {
-        console.error('Failed to send verification email:', error);
-      }
     });
 
     return {
-      message: 'Registration successful. Please check your email for verification code.',
-      token: verificationToken,
+      user: this.excludePassword(user),
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
     };
   }
 
@@ -164,95 +143,11 @@ export class AuthService {
     };
   }
 
-  async verifyEmail(dto: VerifyEmailDto): Promise<AuthResponse> {
-    // Verify token
-    let payload;
-    try {
-      payload = this.jwtService.verify(dto.token);
-    } catch (error) {
-      throw new UnauthorizedException('Invalid or expired verification token');
-    }
-
-    if (payload.type !== 'email_verification') {
-      throw new UnauthorizedException('Invalid token type');
-    }
-
-    // Find user
-    const user = await this.prisma.user.findUnique({
-      where: { id: payload.sub },
-    });
-
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
-    if (user.isEmailVerified) {
-      throw new BadRequestException('Email already verified');
-    }
-
-    // Find the latest email verification record
-    const emailVerification = await this.prisma.emailVerification.findFirst({
-      where: {
-        userId: user.id,
-        isUsed: false,
-        expiresAt: { gt: new Date() },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-
-    if (!emailVerification || emailVerification.code !== dto.code) {
-      throw new UnauthorizedException('Invalid or expired verification code');
-    }
-
-    // Mark verification as used and user as verified
-    await this.prisma.$transaction([
-      this.prisma.emailVerification.update({
-        where: { id: emailVerification.id },
-        data: { isUsed: true },
-      }),
-      this.prisma.user.update({
-        where: { id: user.id },
-        data: { isEmailVerified: true },
-      }),
-    ]);
-
-    // Get updated user
-    const updatedUser = await this.prisma.user.findUnique({
-      where: { id: user.id },
-    });
-
-    if (!updatedUser) {
-      throw new NotFoundException('User not found after update');
-    }
-
-    // Generate tokens
-    const tokens = await this.generateTokens(updatedUser);
-
-    // Store refresh token in database
-    await this.prisma.refreshToken.create({
-      data: {
-        userId: updatedUser.id,
-        token: tokens.refreshToken,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
-      },
-    });
-
-    return {
-      user: this.excludePassword(updatedUser),
-      accessToken: tokens.accessToken,
-      refreshToken: tokens.refreshToken,
-    };
-  }
-
   async login(dto: LoginDto): Promise<AuthResponse> {
     const user = await this.validateUser(dto.email, dto.password);
     
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
-    }
-
-    if (!user.isEmailVerified) {
-      throw new UnauthorizedException('Please verify your email before logging in');
     }
 
     const tokens = await this.generateTokens(user);
@@ -321,100 +216,6 @@ export class AuthService {
     ]);
 
     return tokens;
-  }
-
-  async forgotPassword(dto: ForgotPasswordDto): Promise<{ message: string }> {
-    const user = await this.prisma.user.findUnique({
-      where: { email: dto.email },
-    });
-
-    if (!user) {
-      // Return success message even if user doesn't exist for security
-      return {
-        message: 'If an account with that email exists, we have sent a password reset link.',
-      };
-    }
-
-    // Generate reset token
-    const resetToken = this.jwtService.sign(
-      { sub: user.id, email: user.email, type: 'password_reset' },
-      { expiresIn: '1h' },
-    );
-
-    const resetExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
-
-    // Create password reset record
-    await this.prisma.passwordReset.create({
-      data: {
-        userId: user.id,
-        token: resetToken,
-        expiresAt: resetExpires,
-      },
-    });
-
-    // Send reset email asynchronously
-    setImmediate(async () => {
-      try {
-        await this.emailService.sendPasswordResetEmail(user.email, resetToken);
-      } catch (error) {
-        console.error('Failed to send password reset email:', error);
-      }
-    });
-
-    return {
-      message: 'If an account with that email exists, we have sent a password reset link.',
-    };
-  }
-
-  async resetPassword(dto: ResetPasswordDto): Promise<{ message: string }> {
-    // Verify token
-    let payload;
-    try {
-      payload = this.jwtService.verify(dto.token);
-    } catch (error) {
-      throw new UnauthorizedException('Invalid or expired reset token');
-    }
-
-    if (payload.type !== 'password_reset') {
-      throw new UnauthorizedException('Invalid token type');
-    }
-
-    // Find the password reset record
-    const passwordReset = await this.prisma.passwordReset.findFirst({
-      where: {
-        token: dto.token,
-        isUsed: false,
-        expiresAt: { gt: new Date() },
-      },
-      include: { user: true },
-    });
-
-    if (!passwordReset) {
-      throw new UnauthorizedException('Invalid or expired reset token');
-    }
-
-    const user = passwordReset.user;
-
-    // Hash new password
-    const hashedPassword = await bcrypt.hash(dto.newPassword, 12);
-
-    // Update password, mark reset as used, and revoke all refresh tokens
-    await this.prisma.$transaction([
-      this.prisma.user.update({
-        where: { id: user.id },
-        data: { password: hashedPassword },
-      }),
-      this.prisma.passwordReset.update({
-        where: { id: passwordReset.id },
-        data: { isUsed: true },
-      }),
-      this.prisma.refreshToken.updateMany({
-        where: { userId: user.id },
-        data: { isRevoked: true },
-      }),
-    ]);
-
-    return { message: 'Password reset successful' };
   }
 
   async logout(userId: string): Promise<{ message: string }> {

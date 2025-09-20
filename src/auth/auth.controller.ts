@@ -26,9 +26,6 @@ import { AuthService, AuthResponse, TokenResponse } from './auth.service';
 import {
   RegisterDto,
   LoginDto,
-  VerifyEmailDto,
-  ForgotPasswordDto,
-  ResetPasswordDto,
   RefreshTokenDto,
   UpdateProfileDto,
   RegisterResponseDto,
@@ -48,7 +45,7 @@ export class AuthController {
   @ApiTags('guest')
   @ApiOperation({ 
     summary: 'Register new user',
-    description: 'Create a new user account. Sends verification email with 6-digit code. **No authentication required.**'
+    description: 'Create a new user account and automatically log them in. **No authentication required.**'
   })
   @ApiBody({ 
     type: RegisterDto,
@@ -56,18 +53,25 @@ export class AuthController {
   })
   @ApiResponse({
     status: 201,
-    description: 'User successfully registered. Verification email sent.',
+    description: 'User successfully registered and authenticated.',
     schema: {
       type: 'object',
       properties: {
-        message: {
-          type: 'string',
-          example: 'Registration successful. Please check your email for verification code.'
+        user: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', example: 'f47ac10b-58cc-4372-a567-0e02b2c3d479' },
+            email: { type: 'string', example: 'user@example.com' },
+            username: { type: 'string', example: 'johndoe' },
+            name: { type: 'string', example: 'John Doe' },
+            role: { type: 'string', example: 'USER' },
+            isEmailVerified: { type: 'boolean', example: true },
+            createdAt: { type: 'string', example: '2025-09-20T14:32:00.000Z' },
+            updatedAt: { type: 'string', example: '2025-09-20T14:32:00.000Z' }
+          }
         },
-        token: {
-          type: 'string',
-          example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
-        }
+        accessToken: { type: 'string', example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' },
+        refreshToken: { type: 'string', example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' }
       }
     }
   })
@@ -95,7 +99,7 @@ export class AuthController {
       }
     }
   })
-  async register(@Body() dto: RegisterDto): Promise<{ message: string; token: string }> {
+  async register(@Body() dto: RegisterDto): Promise<AuthResponse> {
     return this.authService.register(dto);
   }
 
@@ -145,74 +149,6 @@ export class AuthController {
   })
   async createAdmin(@Body() dto: RegisterDto): Promise<{ message: string; user: any }> {
     return this.authService.createAdmin(dto);
-  }
-
-  @Post('verify-email')
-  @HttpCode(HttpStatus.OK)
-  @ApiTags('guest')
-  @ApiOperation({ 
-    summary: 'Verify email address',
-    description: 'Verify user email using the 6-digit code sent during registration. Returns access and refresh tokens.'
-  })
-  @ApiBody({ 
-    type: VerifyEmailDto,
-    description: 'Email verification data'
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Email successfully verified. User authenticated.',
-    schema: {
-      type: 'object',
-      properties: {
-        user: {
-          type: 'object',
-          properties: {
-            id: { type: 'number', example: 1 },
-            email: { type: 'string', example: 'user@example.com' },
-            username: { type: 'string', example: 'johndoe' },
-            name: { type: 'string', example: 'John Doe' },
-            isEmailVerified: { type: 'boolean', example: true },
-            createdAt: { type: 'string', example: '2025-09-20T14:32:00.000Z' },
-            updatedAt: { type: 'string', example: '2025-09-20T14:32:00.000Z' }
-          }
-        },
-        accessToken: { type: 'string', example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' },
-        refreshToken: { type: 'string', example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' }
-      }
-    }
-  })
-  @ApiUnauthorizedResponse({
-    description: 'Invalid or expired verification token/code',
-    schema: {
-      type: 'object',
-      properties: {
-        message: { type: 'string', example: 'Invalid or expired verification code' },
-        statusCode: { type: 'number', example: 401 }
-      }
-    }
-  })
-  @ApiNotFoundResponse({
-    description: 'User not found',
-    schema: {
-      type: 'object',
-      properties: {
-        message: { type: 'string', example: 'User not found' },
-        statusCode: { type: 'number', example: 404 }
-      }
-    }
-  })
-  @ApiBadRequestResponse({
-    description: 'Email already verified',
-    schema: {
-      type: 'object',
-      properties: {
-        message: { type: 'string', example: 'Email already verified' },
-        statusCode: { type: 'number', example: 400 }
-      }
-    }
-  })
-  async verifyEmail(@Body() dto: VerifyEmailDto): Promise<AuthResponse> {
-    return this.authService.verifyEmail(dto);
   }
 
   @Post('login')
@@ -304,69 +240,6 @@ export class AuthController {
   })
   async refreshTokens(@Body() dto: RefreshTokenDto): Promise<TokenResponse> {
     return this.authService.refreshTokens(dto);
-  }
-
-  @Post('forgot-password')
-  @HttpCode(HttpStatus.OK)
-  @ApiTags('guest')
-  @ApiOperation({ 
-    summary: 'Request password reset',
-    description: 'Send password reset email to user. Always returns success message for security.'
-  })
-  @ApiBody({ 
-    type: ForgotPasswordDto,
-    description: 'Email for password reset'
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Password reset email sent (if email exists)',
-    schema: {
-      type: 'object',
-      properties: {
-        message: { 
-          type: 'string', 
-          example: 'If an account with that email exists, we have sent a password reset link.' 
-        }
-      }
-    }
-  })
-  async forgotPassword(@Body() dto: ForgotPasswordDto): Promise<{ message: string }> {
-    return this.authService.forgotPassword(dto);
-  }
-
-  @Post('reset-password')
-  @HttpCode(HttpStatus.OK)
-  @ApiTags('guest')
-  @ApiOperation({ 
-    summary: 'Reset password',
-    description: 'Reset user password using the token from password reset email.'
-  })
-  @ApiBody({ 
-    type: ResetPasswordDto,
-    description: 'Password reset data'
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Password successfully reset',
-    schema: {
-      type: 'object',
-      properties: {
-        message: { type: 'string', example: 'Password reset successful' }
-      }
-    }
-  })
-  @ApiUnauthorizedResponse({
-    description: 'Invalid or expired reset token',
-    schema: {
-      type: 'object',
-      properties: {
-        message: { type: 'string', example: 'Invalid or expired reset token' },
-        statusCode: { type: 'number', example: 401 }
-      }
-    }
-  })
-  async resetPassword(@Body() dto: ResetPasswordDto): Promise<{ message: string }> {
-    return this.authService.resetPassword(dto);
   }
 
   @Post('logout')
