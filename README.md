@@ -1437,9 +1437,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 📞 **Support & Contact**
 
 - **GitHub Issues**: [Report bugs or request features](https://github.com/Shariarhosain/e-commerce-nestjs/issues)
-- **Documentation**: [API Documentation](http://localhost:3000/api-docs)
-- **Author**: Shariar Hosain
-- **Email**: [Your Email]
+- **Documentation**: [API Documentation](https://e-commerce-nestjs-production-a304.up.railway.app/api-docs)
+- **Author**: Md.Shariar Hosain Sanny
+- **Email**: Shariarhosain131529@gmail.com
 
 ---
 
