@@ -26,7 +26,23 @@ A comprehensive, production-ready e-commerce REST API built with **NestJS**, **T
 
 ## 🚀 **Latest Updates & New Features**
 
-### **🆕 Recently Added (v1.2.0)**
+### **🆕 Recently Added (v1.3.0) - Current Release**
+- ✅ **Enhanced Order Error Handling**: Comprehensive error messages for order operations
+- ✅ **Custom Authentication Guards**: Context-specific error messages for orders
+- ✅ **Guest Token Removal**: Simplified order creation (authenticated users only)
+- ✅ **Improved Order Status Management**: Better status transition validation
+- ✅ **Enhanced DTO Validation**: Detailed validation messages with user guidance
+- ✅ **Order Creation Fix**: Resolved authorization issues in order processing
+- ✅ **Role-Based Error Messages**: Clear messages for admin vs user operations
+
+### **🔧 Bug Fixes & Improvements (v1.3.0)**
+- 🐛 **Fixed Order Creation**: Resolved "You can only access your own orders" error during creation
+- 🐛 **Authentication Flow**: Fixed JWT parameter passing in order service methods
+- 🔒 **Security Enhancement**: Improved role validation and access control
+- 📝 **Error Documentation**: Added comprehensive error response schemas to Swagger
+- 🎯 **User Experience**: Context-aware error messages guide users to proper actions
+
+### **📦 Previous Release (v1.2.0)**
 - ✅ **Multiple Images Array Support**: Products now return `imageUrls` array instead of single `imageUrl`
 - ✅ **Enhanced UPDATE Endpoint**: PATCH now supports partial updates - only send fields you want to change
 - ✅ **Improved Swagger Documentation**: Better API examples with required/optional field indicators
@@ -75,11 +91,15 @@ A comprehensive, production-ready e-commerce REST API built with **NestJS**, **T
 - ✅ **Cart Transfer** from guest to registered user
 
 ### 📋 **Order Management**
-- ✅ **Checkout Process** from cart to order
+- ✅ **Comprehensive Error Handling** with user-friendly messages
+- ✅ **Custom Authentication Guards** for context-specific errors
+- ✅ **Checkout Process** from cart to order (authenticated users only)
 - ✅ **Order Status Tracking** (PENDING → APPROVED → PROCESSING → SHIPPED → DELIVERED → CANCELLED)
-- ✅ **Admin Order Management**
-- ✅ **Stock Reduction** on order confirmation
-- ✅ **Order History** with pagination
+- ✅ **Smart Status Validation** prevents invalid status transitions
+- ✅ **Admin Order Management** with proper role-based access
+- ✅ **Stock Reduction** on order confirmation with validation
+- ✅ **Order History** with pagination and filtering
+- ✅ **Detailed Error Responses** guide users to correct actions
 
 ### 🏪 **Admin Dashboard**
 - ✅ **Product & Category Management**
@@ -455,7 +475,7 @@ POST   /api/auth/register          # User registration
 POST   /api/auth/login             # User login
 POST   /api/auth/refresh           # Refresh access token
 POST   /api/auth/logout            # User logout
-GET    /api/auth/profile           # Get user profile
+GET    /api/auth/profile           # Get user profile (includes role)
 PATCH  /api/auth/profile           # Update user profile
 POST   /api/auth/create-admin      # Create admin user
 ```
@@ -481,13 +501,19 @@ PATCH  /api/products/:id           # Update product (Admin only)
 DELETE /api/products/:id           # Delete product (Admin only)
 ```
 
-#### **Orders**
+#### **Orders** 
 ```bash
-POST   /api/orders                 # Create order from cart
-GET    /api/orders                 # Get user orders
-GET    /api/orders/stats           # Get order statistics
-GET    /api/orders/:id             # Get order details
+POST   /api/orders                 # Create order from cart (Auth required)
+GET    /api/orders                 # Get user orders (own orders for users)
+GET    /api/orders/stats           # Get order statistics (role-based)
+GET    /api/orders/:id             # Get order details (ownership validated)
 PATCH  /api/orders/:id/status      # Update order status (Admin only)
+```
+
+#### **File Upload**
+```bash
+POST   /api/upload/product-image   # Upload product images (Admin only)
+DELETE /api/upload/product-image   # Delete product image (Admin only)
 ```
 
 ---
@@ -588,7 +614,81 @@ Response:
 }
 ```
 
-### **3. Admin Operations**
+### **3. Order Management (Enhanced Error Handling)**
+
+#### **Create Order (Authentication Required)**
+```bash
+curl -X POST http://localhost:3000/api/orders \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer your-jwt-token" \
+  -d '{
+    "shippingAddress": "123 Main St, City, State 12345",
+    "phoneNumber": "+1234567890",
+    "notes": "Please handle with care"
+  }'
+```
+
+**Success Response:**
+```json
+{
+  "id": "order-uuid",
+  "userId": "user-uuid",
+  "status": "PENDING",
+  "totalAmount": 259.98,
+  "shippingAddress": "123 Main St, City, State 12345",
+  "phoneNumber": "+1234567890",
+  "notes": "Please handle with care",
+  "orderItems": [...],
+  "createdAt": "2025-09-21T..."
+}
+```
+
+**Error Responses:**
+```json
+// Unauthenticated
+{
+  "statusCode": 401,
+  "message": "You must be logged in to place an order. Please login or register to continue.",
+  "error": "Unauthorized"
+}
+
+// Empty Cart
+{
+  "statusCode": 400,
+  "message": "Cannot create order with empty cart. Please add items to your cart first.",
+  "error": "Bad Request"
+}
+
+// Insufficient Stock
+{
+  "statusCode": 400,
+  "message": "Insufficient stock for \"Gaming Laptop\". Available: 5, Requested: 10. Please update your cart and try again.",
+  "error": "Bad Request"
+}
+```
+
+#### **Check Your Role and Permissions**
+```bash
+curl -X GET http://localhost:3000/api/auth/profile \
+  -H "Authorization: Bearer your-jwt-token"
+```
+
+**Response:**
+```json
+{
+  "user": {
+    "id": "user-uuid",
+    "email": "user@example.com",
+    "username": "johndoe",
+    "name": "John Doe",
+    "role": "USER",  // or "ADMIN"
+    "createdAt": "2025-09-21T...",
+    "updatedAt": "2025-09-21T..."
+  }
+}
+```
+
+### **4. Admin Operations**
 
 #### **Create Product with Multiple Images (Admin)**
 ```bash
@@ -604,7 +704,7 @@ curl -X POST http://localhost:3000/api/products \
   -F "images=@image3.jpg"
 ```
 
-**Response:**
+**Success Response:**
 ```json
 {
   "id": "product-uuid",
@@ -621,6 +721,54 @@ curl -X POST http://localhost:3000/api/products \
   "category": { ... },
   "createdAt": "2025-09-21T...",
   "updatedAt": "2025-09-21T..."
+}
+```
+
+**Admin Role Required Error:**
+```json
+{
+  "statusCode": 403,
+  "message": "Required roles: ADMIN",
+  "error": "Forbidden"
+}
+```
+
+#### **Update Order Status (Admin Only)**
+```bash
+curl -X PATCH http://localhost:3000/api/orders/order-uuid/status \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer admin-jwt-token" \
+  -d '{
+    "status": "SHIPPED",
+    "notes": "Package shipped via FedEx. Tracking: 123456789"
+  }'
+```
+
+**Success Response:**
+```json
+{
+  "id": "order-uuid",
+  "status": "SHIPPED",
+  "notes": "Package shipped via FedEx. Tracking: 123456789",
+  "updatedAt": "2025-09-21T..."
+}
+```
+
+**Invalid Status Transition Error:**
+```json
+{
+  "statusCode": 400,
+  "message": "Cannot change status from SHIPPED back to PENDING. Invalid status transition.",
+  "error": "Bad Request"
+}
+```
+
+**Admin Role Required Error:**
+```json
+{
+  "statusCode": 403,
+  "message": "Only administrators can update order status. Please contact an admin if you need to modify an order.",
+  "error": "Forbidden"
 }
 ```
 
@@ -661,16 +809,6 @@ curl -X DELETE http://localhost:3000/api/upload/product-image \
 > - **UPDATE behavior**: New images replace ALL existing images
 > - **Partial updates**: Only send the fields you want to update
 
-#### **Update Order Status (Admin)**
-```bash
-curl -X PATCH http://localhost:3000/api/orders/order-uuid/status \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer admin-jwt-token" \
-  -d '{
-    "status": "SHIPPED"
-  }'
-```
-
 ### **4. Search & Filter Products**
 
 #### **Search Products**
@@ -682,6 +820,37 @@ curl -X GET "http://localhost:3000/api/products/search?q=laptop&category=electro
 ```bash
 curl -X GET "http://localhost:3000/api/products?categoryId=category-uuid&sortBy=price&sortOrder=desc&page=1&limit=10"
 ```
+
+---
+
+## 🔐 **Enhanced Error Handling & Security**
+
+### **🛡️ Authentication Errors**
+The API now provides context-specific error messages for better user experience:
+
+#### **Order Creation Errors**
+- **Unauthenticated**: "You must be logged in to place an order. Please login or register to continue."
+- **Empty Cart**: "Cannot create order with empty cart. Please add items to your cart first."
+- **Stock Issues**: "Insufficient stock for 'Product Name'. Available: X, Requested: Y. Please update your cart and try again."
+
+#### **Admin Access Errors**
+- **Product Creation**: "Required roles: ADMIN"
+- **Order Status Update**: "Only administrators can update order status. Please contact an admin if you need to modify an order."
+- **Invalid Status Transition**: "Cannot change status from SHIPPED back to PENDING. Invalid status transition."
+
+#### **Access Control Errors**
+- **Order Access**: "You can only access your own orders. This order belongs to another user."
+- **Profile Access**: "You must be logged in to view your orders. Please login to access your order history."
+
+### **🔍 Debugging Your Role**
+If you're experiencing unexpected access issues, check your role:
+
+```bash
+curl -X GET http://localhost:3000/api/auth/profile \
+  -H "Authorization: Bearer your-jwt-token"
+```
+
+This will show your current role (`USER` or `ADMIN`) and help debug permission issues.
 
 ---
 
@@ -712,25 +881,97 @@ test/
 └── orders/                   # Order processing tests
 ```
 
-### **Sample Test Data**
+### **API Testing with Sample Data**
 
-The database seeder includes:
+The database seeder includes test data for comprehensive testing:
 - **👑 Admin User**: admin@ecommerce.com (password: admin123)
-- **👥 Sample Users**: 3 test users
+- **👥 Sample Users**: 3 test users with USER role
 - **📂 Categories**: 10 product categories
-- **📦 Products**: 15 sample products
-- **🛒 Sample Carts**: 2 test carts
-- **📋 Sample Orders**: 3 test orders
+- **📦 Products**: 15 sample products with multiple images
+- **🛒 Sample Carts**: 2 test carts with items
+- **📋 Sample Orders**: 3 test orders in different statuses
 
 ```bash
-# Reset and seed database
+# Reset and seed database with test data
 npm run db:reset
 npm run seed
 ```
 
+### **Error Handling Testing**
+
+Test the enhanced error handling with these scenarios:
+
+#### **Authentication Error Testing**
+```bash
+# Test order creation without authentication
+curl -X POST http://localhost:3000/api/orders \
+  -H "Content-Type: application/json" \
+  -d '{"shippingAddress": "123 Test St", "phoneNumber": "1234567890"}'
+
+# Expected: 401 with "You must be logged in to place an order..."
+```
+
+#### **Role-Based Access Testing**
+```bash
+# Test admin endpoint with user token
+curl -X POST http://localhost:3000/api/products \
+  -H "Authorization: Bearer user-jwt-token" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Test Product", "price": 29.99}'
+
+# Expected: 403 with "Required roles: ADMIN"
+```
+
+#### **Order Status Validation Testing**
+```bash
+# Test invalid status transition
+curl -X PATCH http://localhost:3000/api/orders/order-id/status \
+  -H "Authorization: Bearer admin-jwt-token" \
+  -H "Content-Type: application/json" \
+  -d '{"status": "PENDING"}'  # on already DELIVERED order
+
+# Expected: 400 with detailed transition error message
+```
+
 ---
 
-## 📈 **Database Schema**
+## � **Current Deployment Status**
+
+### **✅ Production Ready Features**
+- **Database**: PostgreSQL with Prisma ORM, fully migrated and seeded
+- **Authentication**: JWT-based auth with role management (USER/ADMIN)
+- **Orders**: Complete order lifecycle with enhanced error handling
+- **Cart**: Guest and user cart management with seamless transfer
+- **Products**: Full CRUD with multiple image support
+- **File Upload**: Supabase storage integration
+- **API Documentation**: Complete Swagger/OpenAPI documentation
+- **Error Handling**: Comprehensive, user-friendly error messages
+
+### **🔧 Recent Fixes Applied**
+- ✅ **Order Creation Issue**: Fixed "access your own orders" error during order placement
+- ✅ **JWT Parameter Passing**: Corrected service method parameter handling
+- ✅ **Role Validation**: Enhanced admin endpoint protection
+- ✅ **Guest Token Cleanup**: Removed unused guest token from order creation
+- ✅ **Error Message Context**: Added operation-specific authentication messages
+
+### **🌐 API Status**
+- **Base URL**: `http://localhost:3000/api`
+- **Documentation**: `http://localhost:3000/api-docs`
+- **Health Check**: All endpoints functional with proper error handling
+- **Authentication**: JWT tokens working correctly
+- **Role-Based Access**: Admin/User permissions enforced
+
+### **📊 Current API Metrics**
+- **Total Endpoints**: 25+ REST endpoints
+- **Authentication Routes**: 7 endpoints
+- **Product Management**: 6 endpoints  
+- **Cart Operations**: 6 endpoints
+- **Order Management**: 5 endpoints with enhanced validation
+- **File Upload**: 2 endpoints for image management
+
+---
+
+## �📈 **Database Schema**
 
 ### **🗂️ Entity Relationship Diagram**
 
@@ -859,18 +1100,136 @@ stateDiagram-v2
 
 ---
 
-## 🚀 **Future Scope**
+## � **Troubleshooting Guide**
+
+### **Common Issues & Solutions**
+
+#### **🚫 "You can only access your own orders" Error During Order Creation**
+**Issue**: Getting access error when trying to create a new order  
+**Solution**: This was a bug in v1.2.0 and has been fixed in v1.3.0
+```bash
+# Update to latest version and restart server
+git pull origin main
+npm install
+npm run build
+npm run start:dev
+```
+
+#### **🔐 "Required roles: ADMIN" Error for Regular Operations**
+**Issue**: User account has wrong role or role validation issue  
+**Solution**: Check your user role
+```bash
+curl -X GET http://localhost:3000/api/auth/profile \
+  -H "Authorization: Bearer your-jwt-token"
+```
+If role shows "ADMIN" but you registered as a user, there might be a data issue.
+
+#### **💾 Database Connection Issues**
+**Issue**: "Cannot connect to database" errors  
+**Solution**: 
+```bash
+# Check if PostgreSQL is running
+# Verify DATABASE_URL in .env file
+# Regenerate Prisma client
+npx prisma generate
+npx prisma migrate deploy
+```
+
+#### **📁 Image Upload Failures**
+**Issue**: Product image uploads failing  
+**Solution**: Check Supabase configuration
+```env
+# Verify these environment variables in .env
+SUPABASE_URL="https://your-project.supabase.co"
+SUPABASE_ANON_KEY="your-anon-key"
+SUPABASE_SERVICE_ROLE_KEY="your-service-role-key"
+SUPABASE_BUCKET_NAME="e-commerce"
+```
+
+#### **🔑 JWT Token Validation Errors**
+**Issue**: "Invalid token" or "Token expired" errors  
+**Solution**: 
+```bash
+# Refresh your access token
+curl -X POST http://localhost:3000/api/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{"refreshToken": "your-refresh-token"}'
+```
+
+#### **📦 Empty Cart Order Errors**
+**Issue**: "Cannot create order with empty cart"  
+**Solution**: Add items to cart before checkout
+```bash
+# Check cart contents
+curl -X GET http://localhost:3000/api/cart \
+  -H "Authorization: Bearer your-jwt-token"
+
+# Add items if cart is empty
+curl -X POST http://localhost:3000/api/cart/add \
+  -H "Authorization: Bearer your-jwt-token" \
+  -H "Content-Type: application/json" \
+  -d '{"productId": "product-uuid", "quantity": 1}'
+```
+
+### **🐛 Debugging Steps**
+
+1. **Check Server Status**: Ensure development server is running
+   ```bash
+   npm run start:dev
+   ```
+
+2. **Verify Database**: Check if database is accessible
+   ```bash
+   npx prisma studio  # Opens database browser
+   ```
+
+3. **Test Authentication**: Verify JWT token is valid
+   ```bash
+   curl -X GET http://localhost:3000/api/auth/profile \
+     -H "Authorization: Bearer your-jwt-token"
+   ```
+
+4. **Check Logs**: Monitor server logs for detailed error information
+
+5. **Swagger Documentation**: Use http://localhost:3000/api-docs for testing endpoints
+
+### **📞 Getting Help**
+
+If you encounter issues not covered here:
+1. Check the server logs for detailed error messages
+2. Verify your environment variables match the configuration guide
+3. Ensure you're using the correct API endpoints and HTTP methods
+4. Check that your JWT token hasn't expired
+5. Verify your user role has the necessary permissions
+
+---
+
+## �🚀 **Future Scope**
 
 ### **✅ Recently Implemented Features**
 
-#### **Enhanced File Management (v1.1.0)**
+#### **Enhanced Order Management (v1.3.0)**
+- ✅ **Comprehensive Error Handling**: User-friendly error messages for all order operations
+- ✅ **Custom Authentication Guards**: `OrderAuthGuard` provides context-specific messages
+- ✅ **Smart Validation**: Detailed DTO validation with helpful error descriptions
+- ✅ **Status Transition Logic**: Prevents invalid order status changes with explanations
+- ✅ **Role-Based Messaging**: Different error messages for users vs admins
+- ✅ **Fixed Order Creation Bug**: Resolved authorization error during order placement
+
+#### **Enhanced Authentication (v1.3.0)**
+- ✅ **Improved JWT Handling**: Fixed parameter passing in service methods
+- ✅ **Better Error Documentation**: Comprehensive Swagger error response schemas
+- ✅ **Role Validation**: Enhanced admin-only endpoint protection
+- ✅ **User Experience**: Clear guidance on authentication requirements
+
+#### **Enhanced File Management (v1.2.0)**
 - ✅ **Multiple Image Upload**: Products now support up to 5 images per product
 - ✅ **Image Delete API**: Admin can delete uploaded images via dedicated endpoint
 - ✅ **Enhanced Validation**: Improved file type, size validation and error handling
 - ✅ **Supabase Integration**: Fixed bucket configuration and URL parsing
 - ✅ **Swagger Documentation**: Complete API documentation for upload endpoints
 
-#### **Authentication Improvements (v1.1.0)**
+#### **Authentication Improvements (v1.2.0)**
 - ✅ **Consistent JWT Auth**: Unified `@ApiBearerAuth('JWT-auth')` across all endpoints
 - ✅ **Proper Error Handling**: Enhanced authentication error responses
 - ✅ **Role-Based Security**: Improved admin-only endpoint protection
