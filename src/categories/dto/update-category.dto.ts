@@ -23,4 +23,15 @@ export class UpdateCategoryDto {
   @IsString()
   @MaxLength(500)
   description?: string;
+
+  @ApiProperty({
+    description: 'Category URL slug (auto-generated from name if not provided)',
+    example: 'electronics-updated',
+    required: false,
+    maxLength: 100,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  slug?: string;
 }

@@ -30,7 +30,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         username: true,
         name: true,
         role: true,
-        isEmailVerified: true,
         createdAt: true,
         updatedAt: true,
       },
@@ -38,10 +37,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
     if (!user) {
       throw new UnauthorizedException('User not found');
-    }
-
-    if (!user.isEmailVerified) {
-      throw new UnauthorizedException('Please verify your email before accessing this resource');
     }
 
     return user;

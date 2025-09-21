@@ -36,13 +36,13 @@ import {
 } from './dto';
 import { LocalAuthGuard, JwtAuthGuard } from './guards';
 
+@ApiTags('auth')
 @Controller('api/auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
-  @ApiTags('guest')
   @ApiOperation({ 
     summary: 'Register new user',
     description: 'Create a new user account and automatically log them in. **No authentication required.**'
@@ -105,7 +105,6 @@ export class AuthController {
 
   @Post('create-admin')
   @HttpCode(HttpStatus.CREATED)
-  @ApiTags('admin')
   @ApiOperation({ 
     summary: 'Create first admin user',
     description: 'Creates the first admin user in the system. **System setup endpoint.**'
@@ -154,7 +153,6 @@ export class AuthController {
   @Post('login')
   @UseGuards(LocalAuthGuard)
   @HttpCode(HttpStatus.OK)
-  @ApiTags('guest')
   @ApiOperation({ 
     summary: 'User login',
     description: 'Authenticate user with email/password. Returns access and refresh tokens. **No authentication required.**'
@@ -208,7 +206,6 @@ export class AuthController {
 
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
-  @ApiTags('user')
   @ApiOperation({ 
     summary: 'Refresh JWT tokens',
     description: 'Get new access and refresh tokens using valid refresh token. **Requires valid refresh token.**'
@@ -246,7 +243,6 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth('JWT-auth')
-  @ApiTags('user')
   @ApiOperation({ 
     summary: 'User logout',
     description: 'Revoke refresh token and logout user. **Requires JWT token.**'
@@ -278,7 +274,6 @@ export class AuthController {
   @Get('profile')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth('JWT-auth')
-  @ApiTags('user')
   @ApiOperation({ 
     summary: 'Get user profile',
     description: 'Get current authenticated user profile. **Requires JWT token.**'
@@ -332,7 +327,6 @@ export class AuthController {
 
   @Patch('profile')
   @UseGuards(JwtAuthGuard)
-  @ApiTags('user')
   @ApiOperation({ 
     summary: 'Update user profile',
     description: 'Allow users to update their own profile information (email, username, name)'

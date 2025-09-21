@@ -6,6 +6,7 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
+import slugify from 'slugify';
 import {
   CreateCategoryDto,
   UpdateCategoryDto,
@@ -39,10 +40,20 @@ export class CategoriesService {
         throw new ConflictException('Category with this name already exists');
       }
 
+      // Generate slug from name if not provided
+      let slug: string;
+      if (createCategoryDto.slug) {
+        slug = await this.generateUniqueSlug(createCategoryDto.slug.trim());
+      } else {
+        const baseSlug = slugify(createCategoryDto.name.trim(), { lower: true, strict: true });
+        slug = await this.generateUniqueSlug(baseSlug);
+      }
+
       const category = await this.prisma.category.create({
         data: {
           name: createCategoryDto.name.trim(),
           description: createCategoryDto.description?.trim() || null,
+          slug: slug,
         },
       });
 
@@ -66,6 +77,11 @@ export class CategoriesService {
   async findAll(): Promise<ApiSuccessResponse<CategoryListResponseDto[]>> {
     try {
       const categories = await this.prisma.category.findMany({
+        include: {
+          _count: {
+            select: { products: true }
+          }
+        },
         orderBy: {
           name: 'asc',
         },
@@ -75,24 +91,11 @@ export class CategoriesService {
         return new ApiSuccessResponse('No categories found', []);
       }
 
-      // For now, productCount is 0 since we don't have Product model yet
-      // When Product model is added, this should be updated to:
-      // const categories = await this.prisma.category.findMany({
-      //   include: {
-      //     _count: {
-      //       select: { products: true }
-      //     }
-      //   },
-      //   orderBy: {
-      //     name: 'asc',
-      //   },
-      // });
-
       const categoriesResponse = categories.map(category => ({
         id: category.id,
         name: category.name,
         description: category.description,
-        productCount: 0, // TODO: Update when Product model is added
+        productCount: category._count.products,
       }));
 
       return new ApiSuccessResponse(
@@ -113,6 +116,11 @@ export class CategoriesService {
 
       const category = await this.prisma.category.findUnique({
         where: { id: id.trim() },
+        include: {
+          _count: {
+            select: { products: true }
+          }
+        },
       });
 
       if (!category) {
@@ -120,8 +128,12 @@ export class CategoriesService {
       }
 
       const categoryResponse: CategoryResponseDto = {
-        ...category,
-        productCount: 0, // TODO: Update when Product model is added
+        id: category.id,
+        name: category.name,
+        description: category.description,
+        createdAt: category.createdAt,
+        updatedAt: category.updatedAt,
+        productCount: category._count.products,
       };
 
       return new ApiSuccessResponse('Category retrieved successfully', categoryResponse);
@@ -141,8 +153,8 @@ export class CategoriesService {
       }
 
       // Validate at least one field is provided for update
-      if (!updateCategoryDto.name && !updateCategoryDto.description) {
-        throw new BadRequestException('At least one field (name or description) must be provided for update');
+      if (!updateCategoryDto.name && !updateCategoryDto.description && !updateCategoryDto.slug) {
+        throw new BadRequestException('At least one field (name, description, or slug) must be provided for update');
       }
 
       // If name is provided, validate it and check for duplicates
@@ -172,6 +184,21 @@ export class CategoriesService {
       }
       if (updateCategoryDto.description !== undefined) {
         updateData.description = updateCategoryDto.description?.trim() || null;
+      }
+
+      // Handle slug generation
+      if (updateCategoryDto.slug !== undefined) {
+        if (updateCategoryDto.slug) {
+          // User provided a slug
+          updateData.slug = await this.generateUniqueSlug(updateCategoryDto.slug.trim(), id.trim());
+        } else {
+          // User wants to clear the slug
+          updateData.slug = null;
+        }
+      } else if (updateCategoryDto.name) {
+        // Name was updated but no slug provided, auto-generate from new name
+        const baseSlug = slugify(updateCategoryDto.name.trim(), { lower: true, strict: true });
+        updateData.slug = await this.generateUniqueSlug(baseSlug, id.trim());
       }
 
       const category = await this.prisma.category.update({
@@ -244,6 +271,27 @@ export class CategoriesService {
         throw new NotFoundException('Category not found');
       }
       throw new InternalServerErrorException('Failed to delete category');
+    }
+  }
+
+  private async generateUniqueSlug(baseSlug: string, excludeId?: string): Promise<string> {
+    let slug = baseSlug;
+    let counter = 1;
+
+    while (true) {
+      const where: any = { slug };
+      if (excludeId) {
+        where.NOT = { id: excludeId };
+      }
+
+      const existing = await this.prisma.category.findUnique({ where });
+      
+      if (!existing) {
+        return slug;
+      }
+
+      slug = `${baseSlug}-${counter}`;
+      counter++;
     }
   }
 }

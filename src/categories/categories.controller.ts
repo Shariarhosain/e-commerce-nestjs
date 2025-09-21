@@ -29,7 +29,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles, UserRole } from '../auth/decorators/roles.decorator';
 
-@ApiTags('Categories')
+@ApiTags('categories')
 @Controller('api/categories')
 export class CategoriesController {
   constructor(private readonly categoriesService: CategoriesService) {}
@@ -37,7 +37,7 @@ export class CategoriesController {
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
-  @ApiBearerAuth()
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Create a new category (Admin only)' })
   @ApiResponse({
     status: 201,
@@ -119,7 +119,7 @@ export class CategoriesController {
   @Patch(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
-  @ApiBearerAuth()
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Update a category (Admin only)' })
   @ApiParam({
     name: 'id',
@@ -168,7 +168,7 @@ export class CategoriesController {
   @Delete(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
-  @ApiBearerAuth()
+  @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Delete a category (Admin only)' })
   @ApiParam({

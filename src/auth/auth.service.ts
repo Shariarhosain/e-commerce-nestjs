@@ -8,7 +8,6 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma.service';
-import { EmailService } from './email.service';
 import {
   RegisterDto,
   LoginDto,
@@ -33,7 +32,6 @@ export class AuthService {
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
-    private emailService: EmailService,
   ) {}
 
   async register(dto: RegisterDto): Promise<AuthResponse> {
@@ -56,14 +54,13 @@ export class AuthService {
     // Hash password
     const hashedPassword = await bcrypt.hash(dto.password, 12);
 
-    // Create user with email already verified
+    // Create user
     const user = await this.prisma.user.create({
       data: {
         email: dto.email,
         username: dto.username,
         password: hashedPassword,
         name: dto.name,
-        isEmailVerified: true, // Auto-verify since we're removing email verification
       },
     });
 
@@ -115,7 +112,7 @@ export class AuthService {
     // Hash password
     const hashedPassword = await bcrypt.hash(dto.password, 12);
 
-    // Create admin user with email already verified
+    // Create admin user
     const adminUser = await this.prisma.user.create({
       data: {
         email: dto.email,
@@ -123,7 +120,6 @@ export class AuthService {
         password: hashedPassword,
         name: dto.name,
         role: 'ADMIN',
-        isEmailVerified: true, // Admin doesn't need email verification
       },
       select: {
         id: true,
@@ -131,7 +127,6 @@ export class AuthService {
         username: true,
         name: true,
         role: true,
-        isEmailVerified: true,
         createdAt: true,
         updatedAt: true,
       },
