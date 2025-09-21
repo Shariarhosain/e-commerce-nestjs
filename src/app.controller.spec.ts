@@ -15,8 +15,8 @@ describe('AppController', () => {
   });
 
   describe('root', () => {
-    it('should return "Hello World!"', () => {
-      expect(appController.getHello()).toBe('Hello World!');
+    it('should return "This is the E-Commerce API built with NestJS!"', () => {
+      expect(appController.getHello()).toBe('This is the E-Commerce API built with NestJS!');
     });
   });
 });
