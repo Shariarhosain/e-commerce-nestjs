@@ -16,36 +16,23 @@ import {
   ApiResponse,
   ApiBearerAuth,
   ApiQuery,
+  ApiParam,
+  ApiHeader,
 } from '@nestjs/swagger';
 import { CartService } from './cart.service';
 import {
   AddToCartDto,
   UpdateCartItemDto,
   CartResponseDto,
-  GuestTokenResponseDto,
+  AddToCartResponseDto,
 } from './dto';
 import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
-import { User } from '../auth/decorators/user.decorator';
+import { User, GuestToken } from '../auth/decorators';
 
 @ApiTags('cart')
 @Controller('api/cart')
 export class CartController {
   constructor(private readonly cartService: CartService) {}
-
-  @Post('guest')
-  @ApiOperation({ summary: 'Create a guest cart token' })
-  @ApiResponse({
-    status: 201,
-    description: 'Guest cart token created successfully',
-    type: GuestTokenResponseDto,
-  })
-  async createGuestCart(): Promise<GuestTokenResponseDto> {
-    const { guestToken } = await this.cartService.createGuestCart();
-    return {
-      guestToken,
-      message: 'Guest cart created successfully',
-    };
-  }
 
   @Post('add')
   @UseGuards(OptionalJwtAuthGuard)
@@ -54,25 +41,27 @@ export class CartController {
   @ApiResponse({
     status: 201,
     description: 'Item added to cart successfully',
-    type: CartResponseDto,
+    type: AddToCartResponseDto,
   })
   @ApiResponse({ status: 400, description: 'Bad request' })
   @ApiResponse({ status: 404, description: 'Product not found' })
   async addToCart(
     @Body() addToCartDto: AddToCartDto,
     @User() user?: any,
-  ): Promise<CartResponseDto> {
-    return this.cartService.addToCart(addToCartDto, user?.id);
+    @GuestToken() guestTokenFromAuth?: string,
+  ): Promise<CartResponseDto & { guestToken?: string }> {
+    return this.cartService.addToCart(addToCartDto, user?.id, guestTokenFromAuth);
   }
 
   @Get()
   @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({ summary: 'Get cart contents' })
   @ApiBearerAuth('JWT-auth')
-  @ApiQuery({
-    name: 'guestToken',
+  @ApiHeader({
+    name: 'X-Guest-Token',
     description: 'Guest token for non-authenticated users',
     required: false,
+    example: 'edd62581-5e49-42bc-bb85-0d9741d48d06',
   })
   @ApiResponse({
     status: 200,
@@ -81,16 +70,29 @@ export class CartController {
   })
   @ApiResponse({ status: 404, description: 'Cart not found' })
   async getCart(
-    @Query('guestToken') guestToken?: string,
     @User() user?: any,
+    @GuestToken() guestTokenFromAuth?: string,
   ): Promise<CartResponseDto> {
-    return this.cartService.getCart(user?.id, guestToken);
+    return this.cartService.getCart(user?.id, undefined, guestTokenFromAuth);
   }
 
   @Patch('items/:id')
   @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({ summary: 'Update cart item quantity' })
   @ApiBearerAuth('JWT-auth')
+  @ApiParam({
+    name: 'id',
+    description: 'Cart item ID to update',
+    example: '9a1de781-30e9-4962-aa56-e3cf068d175d',
+    type: 'string',
+    format: 'uuid',
+  })
+  @ApiHeader({
+    name: 'X-Guest-Token',
+    description: 'Guest token for non-authenticated users',
+    required: false,
+    example: 'edd62581-5e49-42bc-bb85-0d9741d48d06',
+  })
   @ApiResponse({
     status: 200,
     description: 'Cart item updated successfully',
@@ -103,18 +105,27 @@ export class CartController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateCartItemDto: UpdateCartItemDto,
     @User() user?: any,
+    @GuestToken() guestTokenFromAuth?: string,
   ): Promise<CartResponseDto> {
-    return this.cartService.updateCartItem(id, updateCartItemDto, user?.id);
+    return this.cartService.updateCartItem(id, updateCartItemDto, user?.id, guestTokenFromAuth);
   }
 
   @Delete('items/:id')
   @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({ summary: 'Remove item from cart' })
   @ApiBearerAuth('JWT-auth')
-  @ApiQuery({
-    name: 'guestToken',
+  @ApiParam({
+    name: 'id',
+    description: 'Cart item ID to remove',
+    example: '9a1de781-30e9-4962-aa56-e3cf068d175d',
+    type: 'string',
+    format: 'uuid',
+  })
+  @ApiHeader({
+    name: 'X-Guest-Token',
     description: 'Guest token for non-authenticated users',
     required: false,
+    example: 'edd62581-5e49-42bc-bb85-0d9741d48d06',
   })
   @ApiResponse({
     status: 200,
@@ -125,48 +136,40 @@ export class CartController {
   @ApiResponse({ status: 404, description: 'Cart item not found' })
   async removeCartItem(
     @Param('id', ParseUUIDPipe) id: string,
-    @Query('guestToken') guestToken?: string,
     @User() user?: any,
+    @GuestToken() guestTokenFromAuth?: string,
   ): Promise<CartResponseDto> {
-    return this.cartService.removeCartItem(id, user?.id, guestToken);
+    return this.cartService.removeCartItem(id, user?.id, undefined, guestTokenFromAuth);
   }
 
   @Delete('clear')
   @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({ summary: 'Clear all items from cart' })
   @ApiBearerAuth('JWT-auth')
-  @ApiQuery({
-    name: 'guestToken',
+  @ApiHeader({
+    name: 'X-Guest-Token',
     description: 'Guest token for non-authenticated users',
     required: false,
+    example: 'edd62581-5e49-42bc-bb85-0d9741d48d06',
   })
-  @ApiResponse({ status: 200, description: 'Cart cleared successfully' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Cart cleared successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        message: {
+          type: 'string',
+          example: 'Cart cleared successfully'
+        }
+      }
+    }
+  })
   @ApiResponse({ status: 404, description: 'Cart not found' })
   async clearCart(
-    @Query('guestToken') guestToken?: string,
     @User() user?: any,
+    @GuestToken() guestTokenFromAuth?: string,
   ): Promise<{ message: string }> {
-    return this.cartService.clearCart(user?.id, guestToken);
-  }
-
-  @Post('transfer')
-  @UseGuards(OptionalJwtAuthGuard)
-  @ApiOperation({ summary: 'Transfer guest cart to authenticated user' })
-  @ApiBearerAuth('JWT-auth')
-  @ApiResponse({
-    status: 200,
-    description: 'Guest cart transferred successfully',
-    type: CartResponseDto,
-  })
-  @ApiResponse({ status: 401, description: 'Authentication required' })
-  @ApiResponse({ status: 404, description: 'Guest cart not found' })
-  async transferGuestCart(
-    @Body('guestToken') guestToken: string,
-    @User() user: any,
-  ): Promise<CartResponseDto> {
-    if (!user?.id) {
-      throw new Error('Authentication required');
-    }
-    return this.cartService.transferGuestCartToUser(guestToken, user.id);
+    return this.cartService.clearCart(user?.id, undefined, guestTokenFromAuth);
   }
 }

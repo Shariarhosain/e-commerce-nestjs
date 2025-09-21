@@ -4,6 +4,8 @@ import {
   UnauthorizedException,
   BadRequestException,
   NotFoundException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
@@ -34,7 +36,7 @@ export class AuthService {
     private jwtService: JwtService,
   ) {}
 
-  async register(dto: RegisterDto): Promise<AuthResponse> {
+  async register(dto: RegisterDto, guestToken?: string): Promise<AuthResponse> {
     // Check if user already exists
     const existingUser = await this.prisma.user.findFirst({
       where: {
@@ -63,6 +65,11 @@ export class AuthService {
         name: dto.name,
       },
     });
+
+    // Auto-transfer guest cart if guest token provided
+    if (guestToken) {
+      await this.transferGuestCartToUser(guestToken, user.id);
+    }
 
     // Generate tokens
     const tokens = await this.generateTokens(user);
@@ -138,11 +145,16 @@ export class AuthService {
     };
   }
 
-  async login(dto: LoginDto): Promise<AuthResponse> {
+  async login(dto: LoginDto, guestToken?: string): Promise<AuthResponse> {
     const user = await this.validateUser(dto.email, dto.password);
     
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
+    }
+
+    // Auto-transfer guest cart if guest token provided
+    if (guestToken) {
+      await this.transferGuestCartToUser(guestToken, user.id);
     }
 
     const tokens = await this.generateTokens(user);
@@ -280,5 +292,71 @@ export class AuthService {
   private excludePassword(user: User): Omit<User, 'password'> {
     const { password, ...userWithoutPassword } = user;
     return userWithoutPassword;
+  }
+
+  private async transferGuestCartToUser(guestToken: string, userId: string): Promise<void> {
+    try {
+      // Find the guest cart
+      const guestCart = await this.prisma.cart.findUnique({
+        where: { guestToken },
+        include: { cartItems: true },
+      });
+
+      if (!guestCart || guestCart.cartItems.length === 0) {
+        return; // No guest cart or empty cart, nothing to transfer
+      }
+
+      // Check if user already has a cart
+      const userCart = await this.prisma.cart.findFirst({
+        where: { userId },
+      });
+
+      if (userCart) {
+        // Merge guest cart items into user cart
+        for (const item of guestCart.cartItems) {
+          const existingItem = await this.prisma.cartItem.findUnique({
+            where: {
+              cartId_productId: {
+                cartId: userCart.id,
+                productId: item.productId,
+              },
+            },
+          });
+
+          if (existingItem) {
+            // Update quantity
+            await this.prisma.cartItem.update({
+              where: { id: existingItem.id },
+              data: {
+                quantity: existingItem.quantity + item.quantity,
+              },
+            });
+          } else {
+            // Move item to user cart
+            await this.prisma.cartItem.update({
+              where: { id: item.id },
+              data: { cartId: userCart.id },
+            });
+          }
+        }
+
+        // Delete guest cart
+        await this.prisma.cart.delete({
+          where: { id: guestCart.id },
+        });
+      } else {
+        // Convert guest cart to user cart
+        await this.prisma.cart.update({
+          where: { id: guestCart.id },
+          data: {
+            userId,
+            guestToken: null,
+          },
+        });
+      }
+    } catch (error) {
+      // Log error but don't break registration/login process
+      console.error('Error transferring guest cart:', error);
+    }
   }
 }

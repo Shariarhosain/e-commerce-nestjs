@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEnum, IsOptional, IsString } from 'class-validator';
+import { IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
 import { OrderStatus } from '@prisma/client';
 
 export class UpdateOrderStatusDto {
@@ -8,7 +8,9 @@ export class UpdateOrderStatusDto {
     enum: OrderStatus,
     example: OrderStatus.APPROVED,
   })
-  @IsEnum(OrderStatus)
+  @IsEnum(OrderStatus, { 
+    message: 'Status must be one of: PENDING, APPROVED, SHIPPED, DELIVERED, CANCELLED' 
+  })
   status: OrderStatus;
 
   @ApiProperty({
@@ -17,6 +19,7 @@ export class UpdateOrderStatusDto {
     example: 'Order approved and ready for processing',
   })
   @IsOptional()
-  @IsString()
+  @IsString({ message: 'Notes must be a valid text string' })
+  @MaxLength(500, { message: 'Notes cannot exceed 500 characters' })
   notes?: string;
 }

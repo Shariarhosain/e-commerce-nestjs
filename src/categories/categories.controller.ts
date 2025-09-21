@@ -42,14 +42,7 @@ export class CategoriesController {
   @ApiResponse({
     status: 201,
     description: 'Category created successfully',
-    schema: {
-      type: 'object',
-      properties: {
-        success: { type: 'boolean', example: true },
-        message: { type: 'string', example: 'Category created successfully' },
-        data: { $ref: '#/components/schemas/CategoryResponseDto' }
-      }
-    }
+    type: CategoryResponseDto,
   })
   @ApiResponse({
     status: 400,
@@ -76,14 +69,7 @@ export class CategoriesController {
   @ApiResponse({
     status: 200,
     description: 'Categories retrieved successfully',
-    schema: {
-      type: 'object',
-      properties: {
-        success: { type: 'boolean', example: true },
-        message: { type: 'string', example: 'Found 5 categories' },
-        data: { type: 'array', items: { $ref: '#/components/schemas/CategoryListResponseDto' } }
-      }
-    }
+    type: [CategoryListResponseDto],
   })
   async findAll(): Promise<ApiSuccessResponse<CategoryListResponseDto[]>> {
     return this.categoriesService.findAll();
@@ -99,14 +85,7 @@ export class CategoriesController {
   @ApiResponse({
     status: 200,
     description: 'Category retrieved successfully',
-    schema: {
-      type: 'object',
-      properties: {
-        success: { type: 'boolean', example: true },
-        message: { type: 'string', example: 'Category retrieved successfully' },
-        data: { $ref: '#/components/schemas/CategoryResponseDto' }
-      }
-    }
+    type: CategoryResponseDto,
   })
   @ApiResponse({
     status: 404,
@@ -129,14 +108,7 @@ export class CategoriesController {
   @ApiResponse({
     status: 200,
     description: 'Category updated successfully',
-    schema: {
-      type: 'object',
-      properties: {
-        success: { type: 'boolean', example: true },
-        message: { type: 'string', example: 'Category updated successfully' },
-        data: { $ref: '#/components/schemas/CategoryResponseDto' }
-      }
-    }
+    type: CategoryResponseDto,
   })
   @ApiResponse({
     status: 400,
@@ -182,14 +154,7 @@ export class CategoriesController {
     schema: {
       type: 'object',
       properties: {
-        success: { type: 'boolean', example: true },
-        message: { type: 'string', example: 'Category deleted successfully' },
-        data: {
-          type: 'object',
-          properties: {
-            message: { type: 'string', example: 'Category "Electronics" has been deleted successfully' }
-          }
-        }
+        message: { type: 'string', example: 'Category deleted successfully' }
       }
     }
   })

@@ -9,7 +9,6 @@ import {
   AddToCartDto,
   UpdateCartItemDto,
   CartResponseDto,
-  GuestTokenResponseDto,
 } from './dto';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -20,7 +19,8 @@ export class CartService {
   async addToCart(
     dto: AddToCartDto,
     userId?: string,
-  ): Promise<CartResponseDto> {
+    guestTokenFromAuth?: string,
+  ): Promise<CartResponseDto & { guestToken?: string }> {
     // Verify product exists and has stock
     const product = await this.prisma.product.findUnique({
       where: { id: dto.productId },
@@ -35,19 +35,27 @@ export class CartService {
     }
 
     let cart;
+    let generatedGuestToken: string | null = null;
 
     if (userId) {
       // Authenticated user cart
       cart = await this.findOrCreateUserCart(userId);
-    } else if (dto.guestToken) {
-      // Guest cart with existing token
-      cart = await this.findGuestCart(dto.guestToken);
-      if (!cart) {
-        throw new NotFoundException('Guest cart not found');
-      }
     } else {
-      // Create new guest cart
-      cart = await this.createGuestCart();
+      // Use guest token from authorization header or create new
+      const guestToken = guestTokenFromAuth;
+      
+      if (guestToken) {
+        // Guest cart with existing token
+        cart = await this.findGuestCart(guestToken);
+        if (!cart) {
+          throw new NotFoundException('Guest cart not found');
+        }
+      } else {
+        // Create new guest cart
+        const { id, guestToken: newToken } = await this.createGuestCart();
+        cart = { id, guestToken: newToken };
+        generatedGuestToken = newToken;
+      }
     }
 
     // Check if item already exists in cart
@@ -79,18 +87,27 @@ export class CartService {
       });
     }
 
-    return this.getCartWithItems(cart.id);
+    const cartResponse = await this.getCartWithItems(cart.id);
+    
+    // Include generated guest token in response if created
+    return generatedGuestToken 
+      ? { ...cartResponse, guestToken: generatedGuestToken }
+      : cartResponse;
   }
 
-  async getCart(userId?: string, guestToken?: string): Promise<CartResponseDto> {
+  async getCart(userId?: string, guestToken?: string, guestTokenFromAuth?: string): Promise<CartResponseDto> {
     let cart;
 
     if (userId) {
       cart = await this.findUserCart(userId);
-    } else if (guestToken) {
-      cart = await this.findGuestCart(guestToken);
     } else {
-      throw new BadRequestException('User ID or guest token required');
+      // Use guest token from authorization header first, then from query parameter
+      const token = guestTokenFromAuth || guestToken;
+      if (token) {
+        cart = await this.findGuestCart(token);
+      } else {
+        throw new BadRequestException('User ID or guest token required');
+      }
     }
 
     if (!cart) {
@@ -104,6 +121,7 @@ export class CartService {
     cartItemId: string,
     dto: UpdateCartItemDto,
     userId?: string,
+    guestTokenFromAuth?: string,
   ): Promise<CartResponseDto> {
     const cartItem = await this.prisma.cartItem.findUnique({
       where: { id: cartItemId },
@@ -122,8 +140,11 @@ export class CartService {
       throw new UnauthorizedException('Not authorized to modify this cart');
     }
 
-    if (!userId && cartItem.cart.guestToken !== dto.guestToken) {
-      throw new UnauthorizedException('Invalid guest token');
+    if (!userId) {
+      const guestToken = guestTokenFromAuth;
+      if (cartItem.cart.guestToken !== guestToken) {
+        throw new UnauthorizedException('Invalid guest token');
+      }
     }
 
     // Check stock if increasing quantity
@@ -154,6 +175,7 @@ export class CartService {
     cartItemId: string,
     userId?: string,
     guestToken?: string,
+    guestTokenFromAuth?: string,
   ): Promise<CartResponseDto> {
     const cartItem = await this.prisma.cartItem.findUnique({
       where: { id: cartItemId },
@@ -169,8 +191,11 @@ export class CartService {
       throw new UnauthorizedException('Not authorized to modify this cart');
     }
 
-    if (!userId && cartItem.cart.guestToken !== guestToken) {
-      throw new UnauthorizedException('Invalid guest token');
+    if (!userId) {
+      const token = guestTokenFromAuth || guestToken;
+      if (cartItem.cart.guestToken !== token) {
+        throw new UnauthorizedException('Invalid guest token');
+      }
     }
 
     await this.prisma.cartItem.delete({
@@ -180,15 +205,19 @@ export class CartService {
     return this.getCartWithItems(cartItem.cartId);
   }
 
-  async clearCart(userId?: string, guestToken?: string): Promise<{ message: string }> {
+  async clearCart(userId?: string, guestToken?: string, guestTokenFromAuth?: string): Promise<{ message: string }> {
     let cart;
 
     if (userId) {
       cart = await this.findUserCart(userId);
-    } else if (guestToken) {
-      cart = await this.findGuestCart(guestToken);
     } else {
-      throw new BadRequestException('User ID or guest token required');
+      // Use guest token from authorization header first, then from query parameter
+      const token = guestTokenFromAuth || guestToken;
+      if (token) {
+        cart = await this.findGuestCart(token);
+      } else {
+        throw new BadRequestException('User ID or guest token required');
+      }
     }
 
     if (!cart) {
@@ -202,7 +231,7 @@ export class CartService {
     return { message: 'Cart cleared successfully' };
   }
 
-  async createGuestCart(): Promise<{ id: string; guestToken: string }> {
+  private async createGuestCart(): Promise<{ id: string; guestToken: string }> {
     const guestToken = uuidv4();
     
     const cart = await this.prisma.cart.create({
@@ -210,70 +239,6 @@ export class CartService {
     });
 
     return { id: cart.id, guestToken };
-  }
-
-  async transferGuestCartToUser(guestToken: string, userId: string): Promise<CartResponseDto> {
-    const guestCart = await this.findGuestCart(guestToken);
-    
-    if (!guestCart) {
-      throw new NotFoundException('Guest cart not found');
-    }
-
-    // Check if user already has a cart
-    const userCart = await this.findUserCart(userId);
-
-    if (userCart) {
-      // Merge carts
-      const guestItems = await this.prisma.cartItem.findMany({
-        where: { cartId: guestCart.id },
-        include: { product: true },
-      });
-
-      for (const item of guestItems) {
-        const existingItem = await this.prisma.cartItem.findUnique({
-          where: {
-            cartId_productId: {
-              cartId: userCart.id,
-              productId: item.productId,
-            },
-          },
-        });
-
-        if (existingItem) {
-          // Update quantity
-          await this.prisma.cartItem.update({
-            where: { id: existingItem.id },
-            data: {
-              quantity: existingItem.quantity + item.quantity,
-            },
-          });
-        } else {
-          // Move item to user cart
-          await this.prisma.cartItem.update({
-            where: { id: item.id },
-            data: { cartId: userCart.id },
-          });
-        }
-      }
-
-      // Delete guest cart
-      await this.prisma.cart.delete({
-        where: { id: guestCart.id },
-      });
-
-      return this.getCartWithItems(userCart.id);
-    } else {
-      // Convert guest cart to user cart
-      const updatedCart = await this.prisma.cart.update({
-        where: { id: guestCart.id },
-        data: {
-          userId,
-          guestToken: null,
-        },
-      });
-
-      return this.getCartWithItems(updatedCart.id);
-    }
   }
 
   private async findOrCreateUserCart(userId: string) {

@@ -21,6 +21,13 @@ export class CategoryResponseDto {
   description: string | null;
 
   @ApiProperty({
+    description: 'Category URL slug',
+    example: 'electronics',
+    nullable: true,
+  })
+  slug: string | null;
+
+  @ApiProperty({
     description: 'Number of products in this category',
     example: 15,
   })

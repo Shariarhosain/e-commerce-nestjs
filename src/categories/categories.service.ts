@@ -95,6 +95,7 @@ export class CategoriesService {
         id: category.id,
         name: category.name,
         description: category.description,
+        slug: category.slug,
         productCount: category._count.products,
       }));
 
@@ -131,6 +132,7 @@ export class CategoriesService {
         id: category.id,
         name: category.name,
         description: category.description,
+        slug: category.slug,
         createdAt: category.createdAt,
         updatedAt: category.updatedAt,
         productCount: category._count.products,
@@ -204,11 +206,21 @@ export class CategoriesService {
       const category = await this.prisma.category.update({
         where: { id: id.trim() },
         data: updateData,
+        include: {
+          _count: {
+            select: { products: true }
+          }
+        },
       });
 
       const categoryResponse: CategoryResponseDto = {
-        ...category,
-        productCount: 0, // TODO: Update when Product model is added
+        id: category.id,
+        name: category.name,
+        description: category.description,
+        slug: category.slug,
+        createdAt: category.createdAt,
+        updatedAt: category.updatedAt,
+        productCount: category._count.products,
       };
 
       return new ApiSuccessResponse('Category updated successfully', categoryResponse);

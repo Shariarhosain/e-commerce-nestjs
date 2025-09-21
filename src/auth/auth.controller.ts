@@ -8,6 +8,7 @@ import {
   Request,
   Get,
   Patch,
+  Headers,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -21,6 +22,7 @@ import {
   ApiBadRequestResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
+  ApiHeader,
 } from '@nestjs/swagger';
 import { AuthService, AuthResponse, TokenResponse } from './auth.service';
 import {
@@ -45,7 +47,13 @@ export class AuthController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ 
     summary: 'Register new user',
-    description: 'Create a new user account and automatically log them in. **No authentication required.**'
+    description: 'Create a new user account and automatically log them in. Cart items will be automatically transferred if guest token is provided. **No authentication required.**'
+  })
+  @ApiHeader({
+    name: 'x-guest-token',
+    description: 'Guest cart token to transfer items to new user account',
+    required: false,
+    example: 'edd62581-5e49-42bc-bb85-0d9741d48d06',
   })
   @ApiBody({ 
     type: RegisterDto,
@@ -99,8 +107,11 @@ export class AuthController {
       }
     }
   })
-  async register(@Body() dto: RegisterDto): Promise<AuthResponse> {
-    return this.authService.register(dto);
+  async register(
+    @Body() dto: RegisterDto,
+    @Headers('x-guest-token') guestToken?: string,
+  ): Promise<AuthResponse> {
+    return this.authService.register(dto, guestToken);
   }
 
   @Post('create-admin')
@@ -155,7 +166,13 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ 
     summary: 'User login',
-    description: 'Authenticate user with email/password. Returns access and refresh tokens. **No authentication required.**'
+    description: 'Authenticate user with email/password. Returns access and refresh tokens. Cart items will be automatically transferred if guest token is provided. **No authentication required.**'
+  })
+  @ApiHeader({
+    name: 'x-guest-token',
+    description: 'Guest cart token to transfer items to user account',
+    required: false,
+    example: 'edd62581-5e49-42bc-bb85-0d9741d48d06',
   })
   @ApiBody({ 
     type: LoginDto,
@@ -198,10 +215,14 @@ export class AuthController {
       }
     }
   })
-  async login(@Request() req, @Body() dto: LoginDto): Promise<AuthResponse> {
+  async login(
+    @Request() req, 
+    @Body() dto: LoginDto,
+    @Headers('x-guest-token') guestToken?: string,
+  ): Promise<AuthResponse> {
     // The LocalAuthGuard validates the user, but we still call the service
     // to get the complete response with tokens
-    return this.authService.login(dto);
+    return this.authService.login(dto, guestToken);
   }
 
   @Post('refresh')

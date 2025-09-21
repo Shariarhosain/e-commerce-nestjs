@@ -26,31 +26,26 @@ export class OrdersService {
   async create(dto: CreateOrderDto, userId?: string): Promise<OrderResponseDto> {
     // Require user to be authenticated for checkout
     if (!userId) {
-      throw new UnauthorizedException('Authentication required to place an order');
+      throw new UnauthorizedException('You must be logged in to place an order. Please login or register to continue.');
     }
 
     // Get user's cart
     let cart;
     try {
-      if (dto.guestToken) {
-        // Transfer guest cart to user first
-        cart = await this.cartService.transferGuestCartToUser(dto.guestToken, userId);
-      } else {
-        cart = await this.cartService.getCart(userId);
-      }
+      cart = await this.cartService.getCart(userId);
     } catch (error) {
-      throw new BadRequestException('Cart not found or empty');
+      throw new BadRequestException('Your cart is empty or could not be found. Please add items to your cart before placing an order.');
     }
 
     if (!cart.cartItems.length) {
-      throw new BadRequestException('Cannot create order with empty cart');
+      throw new BadRequestException('Cannot create order with empty cart. Please add items to your cart first.');
     }
 
     // Verify stock availability for all items
     for (const item of cart.cartItems) {
       if (item.product.stock < item.quantity) {
         throw new BadRequestException(
-          `Insufficient stock for ${item.product.name}. Available: ${item.product.stock}, Requested: ${item.quantity}`,
+          `Insufficient stock for "${item.product.name}". Available: ${item.product.stock}, Requested: ${item.quantity}. Please update your cart and try again.`,
         );
       }
     }
@@ -100,9 +95,12 @@ export class OrdersService {
         return newOrder;
       });
 
-      return this.findOne(order.id);
+      return this.findOne(order.id, userId, 'USER');
     } catch (error) {
-      throw new BadRequestException('Failed to create order');
+      if (error.message.includes('Insufficient stock')) {
+        throw error; // Re-throw stock validation errors
+      }
+      throw new BadRequestException('Failed to create order. Please check your order details and try again.');
     }
   }
 
@@ -120,7 +118,7 @@ export class OrdersService {
     // If not admin, only show user's own orders
     if (userRole !== 'ADMIN') {
       if (!userId) {
-        throw new UnauthorizedException('Authentication required');
+        throw new UnauthorizedException('You must be logged in to view your orders. Please login to access your order history.');
       }
       where.userId = userId;
     } else if (filterDto.userId) {
@@ -215,12 +213,12 @@ export class OrdersService {
     });
 
     if (!order) {
-      throw new NotFoundException('Order not found');
+      throw new NotFoundException('Order not found. Please check the order ID and try again.');
     }
 
     // Check if user can access this order
     if (userRole !== 'ADMIN' && order.userId !== userId) {
-      throw new ForbiddenException('Not authorized to view this order');
+      throw new ForbiddenException('You can only access your own orders. This order belongs to another user.');
     }
 
     return this.transformOrder(order);
@@ -232,7 +230,7 @@ export class OrdersService {
     userRole?: string,
   ): Promise<OrderResponseDto> {
     if (userRole !== 'ADMIN') {
-      throw new ForbiddenException('Only admins can update order status');
+      throw new ForbiddenException('Only administrators can update order status. Please contact an admin if you need to modify an order.');
     }
 
     const order = await this.prisma.order.findUnique({
@@ -240,16 +238,25 @@ export class OrdersService {
     });
 
     if (!order) {
-      throw new NotFoundException('Order not found');
+      throw new NotFoundException('Order not found. Please check the order ID and try again.');
     }
 
     // Business logic for status transitions
     if (order.status === OrderStatus.CANCELLED) {
-      throw new BadRequestException('Cannot update status of cancelled order');
+      throw new BadRequestException('Cannot update status of a cancelled order. Cancelled orders are final.');
     }
 
     if (order.status === OrderStatus.DELIVERED) {
-      throw new BadRequestException('Cannot update status of delivered order');
+      throw new BadRequestException('Cannot update status of a delivered order. The order has already been completed.');
+    }
+
+    // Validate status transition logic
+    if (order.status === OrderStatus.SHIPPED && dto.status === OrderStatus.PENDING) {
+      throw new BadRequestException('Cannot change status from SHIPPED back to PENDING. Invalid status transition.');
+    }
+
+    if (order.status === OrderStatus.SHIPPED && dto.status === OrderStatus.APPROVED) {
+      throw new BadRequestException('Cannot change status from SHIPPED back to APPROVED. Invalid status transition.');
     }
 
     // If cancelling an order, restore product stock
@@ -265,7 +272,7 @@ export class OrdersService {
       },
     });
 
-    return this.findOne(updatedOrder.id);
+    return this.findOne(updatedOrder.id, undefined, userRole);
   }
 
   async getUserOrderStats(userId: string): Promise<any> {
