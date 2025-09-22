@@ -390,8 +390,12 @@ npm run start:prod
 ```
 
 ### **6. Access API Documentation**
-- **Swagger UI**: http://localhost:3000/api-docs
-- **API Base URL**: http://localhost:3000/api
+- **Swagger UI**:
+localhost: http://localhost:3000/api-docs
+server: https://e-commerce-nestjs-production-a304.up.railway.app/api-docs
+- **API Base URL**:
+  localhost: http://localhost:3000/api
+  server: https://e-commerce-nestjs-production-a304.up.railway.app/api
 
 ---
 
